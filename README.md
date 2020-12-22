@@ -1,1 +1,2 @@
-# reflectx
+# goreflectx
+Golang Reflect PKG Extensions
