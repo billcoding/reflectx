@@ -7,7 +7,7 @@ import (
 )
 
 // ParseTag parse struct tag
-func ParseTag(structPtr, tagPtr interface{}, alias, tag string, recursive bool) (structFields []*reflect.StructField, structFieldValues []*reflect.Value, items []interface{}) {
+func ParseTag(structPtr, tagPtr interface{}, alias, tag string, recursive bool) ([]*reflect.StructField, []*reflect.Value, []interface{}) {
 	if reflect.TypeOf(structPtr).Kind() != reflect.Ptr {
 		panic("[validator.createFromTag]structPtr of non-pointer type")
 	}
@@ -21,6 +21,7 @@ func ParseTag(structPtr, tagPtr interface{}, alias, tag string, recursive bool) 
 		panic("[validator.createFromTag]tagPtr Elem of non-struct type")
 	}
 	structType := reflect.TypeOf(structPtr).Elem()
+	structValue := reflect.ValueOf(structPtr)
 	tagType := reflect.TypeOf(tagPtr).Elem()
 	aliasMap := make(map[string]string, 0)
 	for i := 0; i < tagType.NumField(); i++ {
@@ -32,14 +33,17 @@ func ParseTag(structPtr, tagPtr interface{}, alias, tag string, recursive bool) 
 			aliasMap[field.Name] = field.Name
 		}
 	}
-	tagItems := make([]interface{}, 0)
+	structFields := make([]*reflect.StructField, 0)
+	structFieldValues := make([]*reflect.Value, 0)
+	items := make([]interface{}, 0)
 	for i := 0; i < structType.NumField(); i++ {
 		field := structType.Field(i)
-		valueOf := reflect.ValueOf(structPtr)
-		if valueOf.IsNil() || valueOf.IsZero() {
-			continue
+		var fieldValue reflect.Value
+		if structValue.IsNil() {
+			fieldValue = reflect.New(field.Type).Elem()
+		} else {
+			fieldValue = structValue.Elem().Field(i)
 		}
-		fieldValue := valueOf.Elem().Field(i)
 		tagStr, have := field.Tag.Lookup(tag)
 		if !have || tagStr == "" {
 			continue
@@ -62,58 +66,64 @@ func ParseTag(structPtr, tagPtr interface{}, alias, tag string, recursive bool) 
 				SetValue(reflect.ValueOf(val), tagItem.Elem().FieldByName(fieldName))
 			}
 		}
-
-		if IsBasicType(field.Type) {
-			structFields = append(structFields, &field)
-			structFieldValues = append(structFieldValues, &fieldValue)
-			tagItems = append(tagItems, tagItem.Interface())
-		}
+		structFields = append(structFields, &field)
+		structFieldValues = append(structFieldValues, &fieldValue)
+		items = append(items, tagItem.Interface())
 
 		if !recursive {
 			continue
 		}
 
 		switch {
-		case field.Type.Kind() == reflect.Struct:
+		case IsStruct(field.Type):
 			// Struct{}
 			fs, vs, ts := ParseTag(fieldValue.Addr().Interface(), tagPtr, alias, tag, recursive)
 			structFields = append(structFields, fs...)
 			structFieldValues = append(structFieldValues, vs...)
-			tagItems = append(tagItems, ts...)
-		case field.Type.Kind() == reflect.Ptr && field.Type.Elem().Kind() == reflect.Struct:
+			items = append(items, ts...)
+		case IsPtr(field.Type) && IsStruct(field.Type.Elem()):
 			// *Struct{}
 			fs, vs, ts := ParseTag(fieldValue.Interface(), tagPtr, alias, tag, recursive)
 			structFields = append(structFields, fs...)
 			structFieldValues = append(structFieldValues, vs...)
-			tagItems = append(tagItems, ts...)
-		case (field.Type.Kind() == reflect.Slice || field.Type.Kind() == reflect.Array) && field.Type.Elem().Kind() == reflect.Struct:
+			items = append(items, ts...)
+		case (IsSlice(field.Type) || IsArray(field.Type)) && IsStruct(field.Type.Elem()):
 			// []Struct{}
-			valLen := fieldValue.Elem().Len()
+			valLen := fieldValue.Len()
 			for i := 0; i < valLen; i++ {
-				fs, vs, ts := ParseTag(fieldValue.Index(i).Interface(), tagPtr, alias, tag, recursive)
+				fs, vs, ts := ParseTag(fieldValue.Index(i).Addr().Interface(), tagPtr, alias, tag, recursive)
 				structFields = append(structFields, fs...)
 				structFieldValues = append(structFieldValues, vs...)
-				tagItems = append(tagItems, ts...)
+				items = append(items, ts...)
 			}
-		case field.Type.Kind() == reflect.Ptr && (field.Type.Elem().Kind() == reflect.Slice || field.Type.Elem().Kind() == reflect.Array) && field.Type.Elem().Elem().Kind() == reflect.Struct:
+		case (IsSlice(field.Type) || IsArray(field.Type)) && IsPtr(field.Type.Elem()) && IsStruct(field.Type.Elem().Elem()):
+			// []*Struct{}
+			valLen := fieldValue.Len()
+			for i := 0; i < valLen; i++ {
+				fs, vs, ts := ParseTag(fieldValue.Index(i).Elem().Addr().Interface(), tagPtr, alias, tag, recursive)
+				structFields = append(structFields, fs...)
+				structFieldValues = append(structFieldValues, vs...)
+				items = append(items, ts...)
+			}
+		case IsPtr(field.Type) && (IsSlice(field.Type.Elem()) || IsArray(field.Type.Elem())) && IsStruct(field.Type.Elem().Elem()):
 			// *[]Struct{}
 			valLen := fieldValue.Elem().Len()
 			for i := 0; i < valLen; i++ {
-				fs, vs, ts := ParseTag(fieldValue.Elem().Index(i).Interface(), tagPtr, alias, tag, recursive)
+				fs, vs, ts := ParseTag(fieldValue.Elem().Index(i).Addr().Interface(), tagPtr, alias, tag, recursive)
 				structFields = append(structFields, fs...)
 				structFieldValues = append(structFieldValues, vs...)
-				tagItems = append(tagItems, ts...)
+				items = append(items, ts...)
 			}
-		case field.Type.Kind() == reflect.Ptr && (field.Type.Elem().Kind() == reflect.Slice || field.Type.Elem().Kind() == reflect.Array) && field.Type.Elem().Elem().Kind() == reflect.Ptr && field.Type.Elem().Elem().Elem().Kind() == reflect.Struct:
+		case IsPtr(field.Type) && (IsSlice(field.Type.Elem()) || IsArray(field.Type.Elem())) && IsPtr(field.Type.Elem().Elem()) && IsStruct(field.Type.Elem().Elem().Elem()):
 			// *[]*Struct{}
 			valLen := fieldValue.Elem().Len()
 			for i := 0; i < valLen; i++ {
-				fs, vs, ts := ParseTag(fieldValue.Elem().Index(i).Elem().Interface(), tagPtr, alias, tag, recursive)
+				fs, vs, ts := ParseTag(fieldValue.Elem().Index(i).Elem().Addr().Interface(), tagPtr, alias, tag, recursive)
 				structFields = append(structFields, fs...)
 				structFieldValues = append(structFieldValues, vs...)
-				tagItems = append(tagItems, ts...)
+				items = append(items, ts...)
 			}
 		}
 	}
-	return structFields, structFieldValues, tagItems
+	return structFields, structFieldValues, items
 }
