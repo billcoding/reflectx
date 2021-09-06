@@ -6,8 +6,11 @@ import (
 	"strings"
 )
 
-// ParseTag parse struct tag
 func ParseTag(structPtr, tagPtr interface{}, alias, tag string, recursive bool) ([]*reflect.StructField, []*reflect.Value, []interface{}) {
+	return ParseTagWithRe(structPtr, tagPtr, alias, tag, recursive, `([a-zA-Z0-9]+)\(([^()]+)\)`)
+}
+
+func ParseTagWithRe(structPtr, tagPtr interface{}, alias, tag string, recursive bool, re string) ([]*reflect.StructField, []*reflect.Value, []interface{}) {
 	if reflect.TypeOf(structPtr).Kind() != reflect.Ptr {
 		panic("[validator.createFromTag]structPtr of non-pointer type")
 	}
@@ -49,7 +52,7 @@ func ParseTag(structPtr, tagPtr interface{}, alias, tag string, recursive bool) 
 			continue
 		}
 		tagItem := reflect.New(tagType)
-		re := regexp.MustCompile(`([a-z]+)\(([^()]+)\)`)
+		re := regexp.MustCompile(re)
 		tagMatches := re.FindAllStringSubmatch(tagStr, -1)
 		if len(tagMatches) <= 0 {
 			continue
