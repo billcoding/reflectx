@@ -13,16 +13,16 @@ func ParseTag(structPtr, tagPtr interface{}, alias, tag string, recursive bool) 
 
 func ParseTagWithRe(structPtr, tagPtr interface{}, alias, tag string, recursive bool, re string) ([]*reflect.StructField, []*reflect.Value, []interface{}) {
 	if reflect.TypeOf(structPtr).Kind() != reflect.Ptr {
-		panic("[validator.createFromTag]structPtr of non-pointer type")
+		panic("structPtr of non-pointer type")
 	}
 	if reflect.TypeOf(structPtr).Elem().Kind() != reflect.Struct {
-		panic("[validator.createFromTag]structPtr Elem of non-struct type")
+		panic("structPtr Elem of non-struct type")
 	}
 	if reflect.TypeOf(tagPtr).Kind() != reflect.Ptr {
-		panic("[validator.createFromTag]tagPtr of non-pointer type")
+		panic("tagPtr of non-pointer type")
 	}
 	if reflect.TypeOf(tagPtr).Elem().Kind() != reflect.Struct {
-		panic("[validator.createFromTag]tagPtr Elem of non-struct type")
+		panic("tagPtr Elem of non-struct type")
 	}
 	structType := reflect.TypeOf(structPtr).Elem()
 	structValue := reflect.ValueOf(structPtr)
