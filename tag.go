@@ -7,7 +7,8 @@ import (
 )
 
 func ParseTag(structPtr, tagPtr interface{}, alias, tag string, recursive bool) ([]*reflect.StructField, []*reflect.Value, []interface{}) {
-	return ParseTagWithRe(structPtr, tagPtr, alias, tag, recursive, `([a-zA-Z0-9]+)\(([^()]+)\)`)
+	// FIXED: when alias contains `_`, not match!!!
+	return ParseTagWithRe(structPtr, tagPtr, alias, tag, recursive, `([a-zA-Z0-9_]+)\(([^()]+)\)`)
 }
 
 func ParseTagWithRe(structPtr, tagPtr interface{}, alias, tag string, recursive bool, re string) ([]*reflect.StructField, []*reflect.Value, []interface{}) {
