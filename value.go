@@ -1,81 +1,128 @@
 package reflectx
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
-	"log"
-	"os"
 	"reflect"
 	"strconv"
-	"time"
 )
 
-var logger = log.New(os.Stdout, "[reflectx]", log.LstdFlags)
+func handleErr(err error) {
+	if err != nil {
+		panic(errors.New(fmt.Sprintf("reflectx: %v", err)))
+	}
+}
 
-// SetValue from sourceValue to distValue
-func SetValue(sourceValue reflect.Value, distValue reflect.Value) {
+// SetValue from srcValue to distValue
+func SetValue(srcValue, distValue reflect.Value) {
+	if srcValue.Type() == distValue.Type() {
+		distValue.Set(srcValue)
+		return
+	}
 	switch distValue.Kind() {
-	case reflect.Bool:
-		if sourceValue.Type().Kind() == reflect.String && sourceValue.String() != "" {
-			boolVal, err := strconv.ParseBool(sourceValue.String())
-			if err != nil {
-				logger.Println(fmt.Sprintf("[SetValue]%v", err))
-			} else {
-				distValue.SetBool(boolVal)
-			}
-		} else if sourceValue.Type().Kind() == reflect.Bool {
-			distValue.Set(sourceValue)
-		}
 	case reflect.String:
-		if sourceValue.CanInterface() {
-			distValue.SetString(fmt.Sprintf("%v", sourceValue.Interface()))
-		}
-	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int, reflect.Int64:
-		if sourceValue.Type().Kind() == reflect.String && sourceValue.String() != "" {
-			intVal, err := strconv.ParseInt(sourceValue.String(), 10, 64)
-			if err != nil {
-				logger.Println(fmt.Sprintf("[setValue]%v", err))
-			} else {
-				distValue.SetInt(intVal)
-			}
-		} else if sourceValue.Type().Kind() == reflect.Float32 || sourceValue.Type().Kind() == reflect.Float64 {
-			distValue.SetInt(int64(sourceValue.Float()))
-		}
-	case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint, reflect.Uint64:
-		if sourceValue.Type().Kind() == reflect.String && sourceValue.String() != "" {
-			uintVal, err := strconv.ParseUint(sourceValue.String(), 10, 64)
-			if err != nil {
-				logger.Println(fmt.Sprintf("[setValue]%v", err))
-			} else {
-				distValue.SetUint(uintVal)
-			}
-		} else if sourceValue.Type().Kind() == reflect.Float32 || sourceValue.Type().Kind() == reflect.Float64 {
-			distValue.SetUint(uint64(sourceValue.Float()))
-		}
+		setStringValue(srcValue, distValue)
+	case reflect.Bool:
+		setBoolValue(srcValue, distValue)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		setIntValue(srcValue, distValue)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		setUintValue(srcValue, distValue)
 	case reflect.Float32, reflect.Float64:
-		if sourceValue.Type().Kind() == reflect.String && sourceValue.String() != "" {
-			floatVal, err := strconv.ParseFloat(sourceValue.String(), 32)
-			if err != nil {
-				logger.Println(fmt.Sprintf("[setValue]%v", err))
-			} else {
-				distValue.SetFloat(floatVal)
-			}
-		} else if sourceValue.Type().Kind() == reflect.Float32 || sourceValue.Type().Kind() == reflect.Float64 {
-			distValue.SetFloat(sourceValue.Float())
+		setFloatValue(srcValue, distValue)
+	}
+}
+
+// set string value
+func setStringValue(srcValue, distValue reflect.Value) {
+	switch srcValue.Kind() {
+	// Interface->String
+	default:
+		if srcValue.CanInterface() {
+			distValue.SetString(fmt.Sprintf("%v", srcValue.Interface()))
 		}
-	case reflect.Slice, reflect.Array:
-		if sourceValue.Type().Kind() == reflect.Array || sourceValue.Type().Kind() == reflect.Slice {
-			distValue.Set(sourceValue)
-		}
+	// String->String
+	case reflect.String:
+		distValue.SetString(srcValue.String())
+	}
+}
+
+// set bool value
+func setBoolValue(srcValue, distValue reflect.Value) {
+	switch srcValue.Kind() {
+	// String->Bool
+	case reflect.String:
+		boolVal, err := strconv.ParseBool(srcValue.String())
+		handleErr(err)
+		distValue.SetBool(boolVal)
+	// Bool->Bool
+	case reflect.Bool:
+		distValue.Set(srcValue)
+	// sql.NullBool->Bool
 	case reflect.Struct:
-		switch distValue.Type() {
-		case reflect.TypeOf(time.Time{}):
-			if sourceValue.Type().Kind() == reflect.String && sourceValue.String() != "" {
-				distValue.Set(reflect.ValueOf(ParseTime(sourceValue.String())))
-			}
-		case reflect.TypeOf(time.Second):
-			if sourceValue.Type().Kind() == reflect.String && sourceValue.String() != "" {
-				distValue.Set(reflect.ValueOf(ParseDuration(sourceValue.String())))
-			}
+		if srcValue.Type() == reflect.TypeOf(sql.NullBool{}) {
+			distValue.Set(srcValue)
 		}
+	}
+}
+
+// set int value
+func setIntValue(srcValue, distValue reflect.Value) {
+	switch srcValue.Kind() {
+	// String->Int
+	case reflect.String:
+		floatVal, err := strconv.ParseFloat(srcValue.String(), 64)
+		handleErr(err)
+		distValue.SetInt(int64(floatVal))
+	// Float->Int
+	case reflect.Float32, reflect.Float64:
+		distValue.SetInt(int64(srcValue.Float()))
+	// Uint->Int
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		distValue.SetInt(int64(srcValue.Uint()))
+	// Int->Int
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		distValue.SetInt(srcValue.Int())
+	}
+}
+
+// set uint value
+func setUintValue(srcValue, distValue reflect.Value) {
+	switch srcValue.Kind() {
+	// String->Uint
+	case reflect.String:
+		floatVal, err := strconv.ParseFloat(srcValue.String(), 64)
+		handleErr(err)
+		distValue.SetUint(uint64(floatVal))
+	// Float->Uint
+	case reflect.Float32, reflect.Float64:
+		distValue.SetUint(uint64(srcValue.Float()))
+	// Int->Uint
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		distValue.SetUint(uint64(srcValue.Int()))
+	// Uint->Uint
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		distValue.SetUint(srcValue.Uint())
+	}
+}
+
+// set float value
+func setFloatValue(srcValue, distValue reflect.Value) {
+	switch srcValue.Kind() {
+	// String->Float
+	case reflect.String:
+		floatVal, err := strconv.ParseFloat(srcValue.String(), 64)
+		handleErr(err)
+		distValue.SetFloat(floatVal)
+	// Int->Float
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		distValue.SetFloat(float64(srcValue.Int()))
+	// Uint->Float
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		distValue.SetFloat(float64(srcValue.Uint()))
+	// Float->Float
+	case reflect.Float32, reflect.Float64:
+		distValue.SetFloat(srcValue.Float())
 	}
 }

@@ -11,7 +11,7 @@ func ParseTag(structPtr, tagPtr interface{}, alias, tag string, recursive bool) 
 	return ParseTagWithRe(structPtr, tagPtr, alias, tag, recursive, `([a-zA-Z0-9_]+)\(([^()]+)\)`)
 }
 
-func ParseTagWithRe(structPtr, tagPtr interface{}, alias, tag string, recursive bool, re string) ([]*reflect.StructField, []*reflect.Value, []interface{}) {
+func ParseTagWithRe(structPtr, tagPtr interface{}, alias, tag string, recursive bool, regex string) ([]*reflect.StructField, []*reflect.Value, []interface{}) {
 	if reflect.TypeOf(structPtr).Kind() != reflect.Ptr {
 		panic("structPtr of non-pointer type")
 	}
@@ -53,7 +53,7 @@ func ParseTagWithRe(structPtr, tagPtr interface{}, alias, tag string, recursive 
 			continue
 		}
 		tagItem := reflect.New(tagType)
-		re := regexp.MustCompile(re)
+		re := regexp.MustCompile(regex)
 		tagMatches := re.FindAllStringSubmatch(tagStr, -1)
 		if len(tagMatches) <= 0 {
 			continue
@@ -65,8 +65,8 @@ func ParseTagWithRe(structPtr, tagPtr interface{}, alias, tag string, recursive 
 			_ = matches[0]
 			name := strings.TrimSpace(matches[1])
 			val := strings.TrimSpace(matches[2])
-			fieldName, have := aliasMap[name]
-			if have {
+			fieldName, fHave := aliasMap[name]
+			if fHave {
 				SetValue(reflect.ValueOf(val), tagItem.Elem().FieldByName(fieldName))
 			}
 		}
@@ -103,8 +103,8 @@ func ParseTagWithRe(structPtr, tagPtr interface{}, alias, tag string, recursive 
 		case (IsSlice(field.Type) || IsArray(field.Type)) && IsPtr(field.Type.Elem()) && IsStruct(field.Type.Elem().Elem()):
 			// []*Struct{}
 			valLen := fieldValue.Len()
-			for i := 0; i < valLen; i++ {
-				fs, vs, ts := ParseTag(fieldValue.Index(i).Elem().Addr().Interface(), tagPtr, alias, tag, recursive)
+			for j := 0; j < valLen; j++ {
+				fs, vs, ts := ParseTag(fieldValue.Index(j).Elem().Addr().Interface(), tagPtr, alias, tag, recursive)
 				structFields = append(structFields, fs...)
 				structFieldValues = append(structFieldValues, vs...)
 				items = append(items, ts...)
@@ -112,8 +112,8 @@ func ParseTagWithRe(structPtr, tagPtr interface{}, alias, tag string, recursive 
 		case IsPtr(field.Type) && (IsSlice(field.Type.Elem()) || IsArray(field.Type.Elem())) && IsStruct(field.Type.Elem().Elem()):
 			// *[]Struct{}
 			valLen := fieldValue.Elem().Len()
-			for i := 0; i < valLen; i++ {
-				fs, vs, ts := ParseTag(fieldValue.Elem().Index(i).Addr().Interface(), tagPtr, alias, tag, recursive)
+			for j := 0; j < valLen; j++ {
+				fs, vs, ts := ParseTag(fieldValue.Elem().Index(j).Addr().Interface(), tagPtr, alias, tag, recursive)
 				structFields = append(structFields, fs...)
 				structFieldValues = append(structFieldValues, vs...)
 				items = append(items, ts...)
@@ -121,8 +121,8 @@ func ParseTagWithRe(structPtr, tagPtr interface{}, alias, tag string, recursive 
 		case IsPtr(field.Type) && (IsSlice(field.Type.Elem()) || IsArray(field.Type.Elem())) && IsPtr(field.Type.Elem().Elem()) && IsStruct(field.Type.Elem().Elem().Elem()):
 			// *[]*Struct{}
 			valLen := fieldValue.Elem().Len()
-			for i := 0; i < valLen; i++ {
-				fs, vs, ts := ParseTag(fieldValue.Elem().Index(i).Elem().Addr().Interface(), tagPtr, alias, tag, recursive)
+			for j := 0; j < valLen; j++ {
+				fs, vs, ts := ParseTag(fieldValue.Elem().Index(j).Elem().Addr().Interface(), tagPtr, alias, tag, recursive)
 				structFields = append(structFields, fs...)
 				structFieldValues = append(structFieldValues, vs...)
 				items = append(items, ts...)
